@@ -1,6 +1,6 @@
 import { React } from "dium";
 import { GuildsTreeFolder } from "@dium/modules";
-import { Flex, Button, FormSwitch, FormText, ImageInput, margins } from "@dium/components";
+import { FormSwitch } from "@dium/components";
 import { FolderData } from "./settings";
 import { renderIcon } from "./icon";
 
@@ -9,22 +9,62 @@ export interface BetterFolderUploaderProps extends FolderData {
     onChange(data: FolderData): void;
 }
 
-export const BetterFolderUploader = ({ icon, always, onChange }: BetterFolderUploaderProps): React.JSX.Element => (
-    <>
-        <Flex align={Flex.Align.CENTER} className={margins.marginBottom20}>
-            <Button color={Button.Colors.WHITE} look={Button.Looks.OUTLINED}>
-                Upload Image
-                <ImageInput onChange={(img: string) => onChange({ icon: img, always })} />
-            </Button>
-            <FormText type="description" style={{ margin: "0 10px 0 40px" }}>
-                Preview:
-            </FormText>
-            {renderIcon({ icon, always: true })}
-        </Flex>
-        <FormSwitch
-            checked={always}
-            onChange={(checked) => onChange({ icon, always: checked })}
-            label="Always display icon"
-        />
-    </>
-);
+const rowStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 20,
+    flexWrap: "wrap",
+};
+
+const uploadLabelStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 32,
+    padding: "0 14px",
+    borderRadius: 4,
+    border: "1px solid var(--button-outline-brand-border, var(--border-subtle))",
+    cursor: "pointer",
+};
+
+const previewLabelStyle: React.CSSProperties = {
+    color: "var(--text-muted)",
+};
+
+export const BetterFolderUploader = ({ icon, always, onChange }: BetterFolderUploaderProps): React.JSX.Element => {
+    const onFileChange = ({ currentTarget }: React.ChangeEvent<HTMLInputElement>) => {
+        const file = currentTarget.files?.[0];
+        if (!file) {
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+            if (typeof reader.result === "string") {
+                onChange({ icon: reader.result, always });
+            }
+        });
+        reader.readAsDataURL(file);
+
+        currentTarget.value = "";
+    };
+
+    return (
+        <>
+            <div style={rowStyle}>
+                <label style={uploadLabelStyle}>
+                    <input type="file" accept="image/*" style={{ display: "none" }} onChange={onFileChange} />
+                    Upload Image
+                </label>
+                <span style={previewLabelStyle}>Preview:</span>
+                {renderIcon({ icon, always: true })}
+            </div>
+            <FormSwitch
+                checked={always}
+                onChange={(checked) => onChange({ icon, always: checked })}
+                label="Always display icon"
+            />
+        </>
+    );
+};

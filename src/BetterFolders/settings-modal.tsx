@@ -1,6 +1,6 @@
 import { React, Logger, Utils, PatchDataWithResult } from "dium";
 import { SortedGuildStore, GuildsTreeFolder } from "@dium/modules";
-import { RadioGroup, FormItem, TextInput } from "@dium/components";
+import { FormSwitch, TextInput } from "@dium/components";
 import { BetterFolderUploader } from "./uploader";
 import { Settings } from "./settings";
 
@@ -94,32 +94,29 @@ export const renderFolderSettingsPatch = ({
         return;
     }
 
+    const iconType = state.iconType ?? (state.icon ? IconType.Custom : IconType.Default);
+
     // inject our elements
     const { children } = parent.props;
     children.push(
-        <FormItem title="Icon">
-            <RadioGroup
-                value={state.iconType}
-                options={[
-                    { value: IconType.Default, name: "Default Icon" },
-                    { value: IconType.Custom, name: "Custom Icon" },
-                ]}
-                onChange={({ value }) => context.setState({ iconType: value })}
-            />
-        </FormItem>,
+        <FormSwitch
+            checked={iconType === IconType.Custom}
+            label="Custom Icon"
+            onChange={(checked) => context.setState({ iconType: checked ? IconType.Custom : IconType.Default })}
+        />,
     );
 
-    if (state.iconType === IconType.Custom) {
+    if (iconType === IconType.Custom) {
         const tree = SortedGuildStore.getGuildsTree();
         children.push(
-            <FormItem title="Custom Icon">
+            <div style={{ marginTop: 20 }}>
                 <BetterFolderUploader
                     icon={state.icon}
                     always={state.always}
                     folderNode={tree.nodes[folderId] as GuildsTreeFolder}
                     onChange={({ icon, always }) => context.setState({ icon, always })}
                 />
-            </FormItem>,
+            </div>,
         );
     }
 };

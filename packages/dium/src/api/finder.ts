@@ -79,7 +79,7 @@ export const resolveKey = <T, K extends string = string>(target: Record<K, T>, f
 
 /** Resolves the key corresponding to the value matching the filter function. */
 export const findWithKey = <T, K extends string = string>(filter: Filter): [Record<K, T>, K] =>
-    resolveKey(find(Filters.byEntry(filter)), filter);
+    resolveKey(find(Filters.byEntry(filter), { resolve: false }), filter);
 
 type Mapping = Record<string, (entry: any) => boolean>;
 type Mapped<M extends Mapping> = { [K in keyof M]: any };
@@ -132,7 +132,7 @@ export const waitFor = <T>(filter: Filter, { resolve = true, entries = false }: 
 
 /** Waits for a lazy loaded module. */
 export const waitForWithKey = async <T, K extends string = string>(filter: Filter): Promise<[Record<K, T>, K]> => {
-    const target: Record<K, T> = await waitFor(Filters.byEntry(filter));
+    const target: Record<K, T> = await waitFor(Filters.byEntry(filter), { resolve: false });
     return resolveKey(target, filter);
 };
 

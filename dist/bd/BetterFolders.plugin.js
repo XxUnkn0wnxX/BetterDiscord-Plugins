@@ -100,36 +100,6 @@ const bySource$1 = (...fragments) => {
 };
 
 const confirm = (title, content, options = {}) => BdApi.UI.showConfirmationModal(title, content, options);
-const mappedProxy = (target, mapping) => {
-    const map = new Map(Object.entries(mapping));
-    return new Proxy(target, {
-        get(target, prop) {
-            return target[map.get(prop) ?? prop];
-        },
-        set(target, prop, value) {
-            target[map.get(prop) ?? prop] = value;
-            return true;
-        },
-        deleteProperty(target, prop) {
-            delete target[map.get(prop) ?? prop];
-            map.delete(prop);
-            return true;
-        },
-        has(target, prop) {
-            return map.has(prop) || prop in target;
-        },
-        ownKeys() {
-            return [...map.keys(), ...Object.keys(target)];
-        },
-        getOwnPropertyDescriptor(target, prop) {
-            return Object.getOwnPropertyDescriptor(target, map.get(prop) ?? prop);
-        },
-        defineProperty(target, prop, attributes) {
-            Object.defineProperty(target, map.get(prop) ?? prop, attributes);
-            return true;
-        },
-    });
-};
 
 const find = (filter, { resolve = true, entries = false } = {}) => BdApi.Webpack.getModule(filter, {
     defaultExport: resolve,
@@ -142,21 +112,6 @@ const resolveKey = (target, filter) => [
     target,
     (target ? Object.entries(target).find(([, value]) => filter(value))?.[0] : null),
 ];
-const findWithKey = (filter) => resolveKey(find(byEntry(filter)), filter);
-const demangle = (mapping, required, proxy = false) => {
-    const req = Object.keys(mapping);
-    const found = find((target) => checkObjectValues(target)
-        && req.every((req) => Object.values(target).some((value) => mapping[req](value))));
-    return proxy
-        ? mappedProxy(found, Object.fromEntries(Object.entries(mapping).map(([key, filter]) => [
-            key,
-            Object.entries(found ?? {}).find(([, value]) => filter(value))?.[0],
-        ])))
-        : Object.fromEntries(Object.entries(mapping).map(([key, filter]) => [
-            key,
-            Object.values(found ?? {}).find((value) => filter(value)),
-        ]));
-};
 let controller = new AbortController();
 const waitFor = (filter, { resolve = true, entries = false } = {}) => BdApi.Webpack.waitForModule(filter, {
     signal: controller.signal,
@@ -237,26 +192,14 @@ const Button = /* @__PURE__ */ byKeys(["Colors", "Link"], { entries: true });
 
 const Flex = /* @__PURE__ */ byKeys(["Child", "Justify", "Align"], { entries: true });
 
-const FormItem = /* @__PURE__ */ bySource(["titleClassName:", "required:"], { entries: true });
 const FormSwitch = /* @__PURE__ */ bySource(["checked:", "innerRef:", "layout:"], {
     entries: true,
 });
 const FormDivider = /* @__PURE__ */ bySource(["marginTop:", (source) => /{className:.,gap:.}=/.test(source)], {
     entries: true,
 });
-const FormText = /* @__PURE__ */ bySource(["type:", "style:", "disabled:", "variant:", ".DEFAULT"], {
-    entries: true,
-});
-
-const margins = /* @__PURE__ */ byKeys(["marginBottom40", "marginTop4"]);
-
-const { RadioGroup} = /* @__PURE__ */ demangle({
-    RadioGroup: bySource$1((source) => /{label:.,description:.,required:./.test(source)),
-    getRadioAttributes: bySource$1(`role:"radio"`),
-});
 
 const TextInput = /* @__PURE__ */ bySource(["placeholder", "maxLength", "clearable"], { entries: true });
-const ImageInput = /* @__PURE__ */ find((target) => typeof target.defaultProps?.multiple === "boolean" && typeof target.defaultProps?.maxFileSizeBytes === "number");
 
 const replaceElement = (target, replace) => {
     target.type = replace.type;
@@ -504,14 +447,50 @@ const ConnectedBetterFolderIcon = ({ folderId, ...props }) => {
     return React.createElement(BetterFolderIcon, { data: data, ...props });
 };
 
-const BetterFolderUploader = ({ icon, always, onChange }) => (React.createElement(React.Fragment, null,
-    React.createElement(Flex, { align: Flex.Align.CENTER, className: margins.marginBottom20 },
-        React.createElement(Button, { color: Button.Colors.WHITE, look: Button.Looks.OUTLINED },
-            "Upload Image",
-            React.createElement(ImageInput, { onChange: (img) => onChange({ icon: img, always }) })),
-        React.createElement(FormText, { type: "description", style: { margin: "0 10px 0 40px" } }, "Preview:"),
-        renderIcon({ icon})),
-    React.createElement(FormSwitch, { checked: always, onChange: (checked) => onChange({ icon, always: checked }), label: "Always display icon" })));
+const rowStyle = {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 20,
+    flexWrap: "wrap",
+};
+const uploadLabelStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 32,
+    padding: "0 14px",
+    borderRadius: 4,
+    border: "1px solid var(--button-outline-brand-border, var(--border-subtle))",
+    cursor: "pointer",
+};
+const previewLabelStyle = {
+    color: "var(--text-muted)",
+};
+const BetterFolderUploader = ({ icon, always, onChange }) => {
+    const onFileChange = ({ currentTarget }) => {
+        const file = currentTarget.files?.[0];
+        if (!file) {
+            return;
+        }
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+            if (typeof reader.result === "string") {
+                onChange({ icon: reader.result, always });
+            }
+        });
+        reader.readAsDataURL(file);
+        currentTarget.value = "";
+    };
+    return (React.createElement(React.Fragment, null,
+        React.createElement("div", { style: rowStyle },
+            React.createElement("label", { style: uploadLabelStyle },
+                React.createElement("input", { type: "file", accept: "image/*", style: { display: "none" }, onChange: onFileChange }),
+                "Upload Image"),
+            React.createElement("span", { style: previewLabelStyle }, "Preview:"),
+            renderIcon({ icon})),
+        React.createElement(FormSwitch, { checked: always, onChange: (checked) => onChange({ icon, always: checked }), label: "Always display icon" })));
+};
 
 const mountFolderSettingsPatch = ({ context, }) => {
     const { props: { folderId }, state, } = context;
@@ -547,20 +526,24 @@ const renderFolderSettingsPatch = ({ context, result, }) => {
         warn("Unable to find text input parent");
         return;
     }
+    const iconType = state.iconType ?? (state.icon ? "custom"  : "default" );
     const { children } = parent.props;
-    children.push(React.createElement(FormItem, { title: "Icon" },
-        React.createElement(RadioGroup, { value: state.iconType, options: [
-                { value: "default" , name: "Default Icon" },
-                { value: "custom" , name: "Custom Icon" },
-            ], onChange: ({ value }) => context.setState({ iconType: value }) })));
-    if (state.iconType === "custom" ) {
+    children.push(React.createElement(FormSwitch, { checked: iconType === "custom" , label: "Custom Icon", onChange: (checked) => context.setState({ iconType: checked ? "custom"  : "default"  }) }));
+    if (iconType === "custom" ) {
         const tree = SortedGuildStore.getGuildsTree();
-        children.push(React.createElement(FormItem, { title: "Custom Icon" },
+        children.push(React.createElement("div", { style: { marginTop: 20 } },
             React.createElement(BetterFolderUploader, { icon: state.icon, always: state.always, folderNode: tree.nodes[folderId], onChange: ({ icon, always }) => context.setState({ icon, always }) })));
     }
 };
 
 const guildStyles = byKeys(["guilds", "base"]);
+const folderIconWrapperFilter = bySource$1((source) => {
+    return (source.includes("folderNode:")
+        && (source.includes("folderName") || source.includes(".folderName"))
+        && (source.includes("folderGroupId:")
+            || source.includes("folderIconWrapper")
+            || source.includes("expandedFolderIconWrapper")));
+});
 const getGuildsOwner = () => {
     const node = document.getElementsByClassName(guildStyles.guilds)?.[0];
     if (node) {
@@ -587,19 +570,25 @@ const index = createPlugin({
     start() {
         let FolderIcon = null;
         const guildsOwner = getGuildsOwner();
-        const FolderIconWrapper = findWithKey(bySource$1("folderNode:", "folderGroupId:", "folderName"));
-        after(...FolderIconWrapper, ({ args: [props], result }) => {
-            const icon = queryTree(result, (node) => node?.props?.folderNode);
-            if (!icon) {
-                return error("Unable to find FolderIcon component");
+        waitFor(byEntry(folderIconWrapperFilter), { resolve: false }).then((result) => {
+            const FolderIconWrapper = resolveKey(result, folderIconWrapperFilter);
+            if (!FolderIconWrapper[0] || !FolderIconWrapper[1]) {
+                error("Unable to find FolderIconWrapper module");
+                return;
             }
-            if (!FolderIcon) {
-                log("Found FolderIcon component");
-                FolderIcon = icon.type;
-            }
-            replaceElement(icon, React.createElement(ConnectedBetterFolderIcon, { folderId: props.folderNode.id, childProps: icon.props, FolderIcon: FolderIcon }));
-        }, { name: "FolderIconWrapper" });
-        triggerRerender(guildsOwner);
+            after(...FolderIconWrapper, ({ args: [props], result }) => {
+                const icon = queryTree(result, (node) => node?.props?.folderNode);
+                if (!icon) {
+                    return error("Unable to find FolderIcon component");
+                }
+                if (!FolderIcon) {
+                    log("Found FolderIcon component");
+                    FolderIcon = icon.type;
+                }
+                replaceElement(icon, React.createElement(ConnectedBetterFolderIcon, { folderId: props.folderNode.id, childProps: icon.props, FolderIcon: FolderIcon }));
+            }, { name: "FolderIconWrapper" });
+            triggerRerender(guildsOwner);
+        });
         after(ClientActions, "toggleGuildFolderExpand", ({ original, args: [folderId] }) => {
             if (Settings.current.closeOnOpen) {
                 for (const id of ExpandedGuildFolderStore.getExpandedFolders()) {

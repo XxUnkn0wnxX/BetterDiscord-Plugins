@@ -161,33 +161,45 @@ const print = (output, ...data) => output(`%c[${getMeta().name}] %c${getMeta().v
 const log = (...data) => print(console.log, ...data);
 const warn = (...data) => print(console.warn, ...data);
 
+let manualPatches = [];
+const addManual = (cancel, name) => {
+    manualPatches.push(cancel);
+};
 const patch = (type, object, method, callback, options) => {
     const original = object?.[method];
     const name = options.name ?? String(method);
     if (!(original instanceof Function)) {
-        throw TypeError(`patch target ${name} is ${original} not function`);
+        if (options.force && !original) {
+            warn(`Forcing patch on ${name}`);
+            object[method] = function noop() { };
+            addManual(() => {
+                object[method] = original;
+            });
+        }
+        else {
+            throw TypeError(`patch target ${name} is ${original} not function`);
+        }
     }
     const cancel = BdApi.Patcher[type](getMeta().name, object, method, options.once
-        ? (...args) => {
-            const result = callback(cancel, original, ...args);
+        ? (context, args, result) => {
+            const newResult = callback({ cancel, original, context, args, result });
             cancel();
-            return result;
+            return newResult;
         }
-        : (...args) => callback(cancel, original, ...args));
+        : (context, args, result) => callback({ cancel, original, context, args, result }));
     if (!options.silent) {
         log(`Patched ${name}`);
     }
     return cancel;
 };
-const after = (object, method, callback, options = {}) => patch("after", object, method, (cancel, original, context, args, result) => callback({ cancel, original, context, args, result }), options);
-let menuPatches = [];
+const after = (object, method, callback, options = {}) => patch("after", object, method, callback, options);
 const unpatchAll = () => {
-    if (menuPatches.length + BdApi.Patcher.getPatchesByCaller(getMeta().name).length > 0) {
-        for (const cancel of menuPatches) {
+    if (manualPatches.length + BdApi.Patcher.getPatchesByCaller(getMeta().name).length > 0) {
+        BdApi.Patcher.unpatchAll(getMeta().name);
+        for (const cancel of manualPatches) {
             cancel();
         }
-        menuPatches = [];
-        BdApi.Patcher.unpatchAll(getMeta().name);
+        manualPatches = [];
         log("Unpatched all");
     }
 };

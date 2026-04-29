@@ -158,33 +158,46 @@ const log = (...data) => print(console.log, ...data);
 const warn = (...data) => print(console.warn, ...data);
 const error = (...data) => print(console.error, ...data);
 
+let manualPatches = [];
+const addManual = (cancel, name) => {
+    manualPatches.push(cancel);
+};
 const patch = (type, object, method, callback, options) => {
     const original = object?.[method];
+    const name = options.name ?? String(method);
     if (!(original instanceof Function)) {
-        throw TypeError(`patch target ${original} is not a function`);
+        if (options.force && !original) {
+            warn(`Forcing patch on ${name}`);
+            object[method] = function noop() { };
+            addManual(() => {
+                object[method] = original;
+            });
+        }
+        else {
+            throw TypeError(`patch target ${name} is ${original} not function`);
+        }
     }
     const cancel = BdApi.Patcher[type](getMeta().name, object, method, options.once
-        ? (...args) => {
-            const result = callback(cancel, original, ...args);
+        ? (context, args, result) => {
+            const newResult = callback({ cancel, original, context, args, result });
             cancel();
-            return result;
+            return newResult;
         }
-        : (...args) => callback(cancel, original, ...args));
+        : (context, args, result) => callback({ cancel, original, context, args, result }));
     if (!options.silent) {
-        log(`Patched ${options.name ?? String(method)}`);
+        log(`Patched ${name}`);
     }
     return cancel;
 };
-const instead = (object, method, callback, options = {}) => patch("instead", object, method, (cancel, original, context, args) => callback({ cancel, original, context, args }), options);
-const after = (object, method, callback, options = {}) => patch("after", object, method, (cancel, original, context, args, result) => callback({ cancel, original, context, args, result }), options);
-let menuPatches = [];
+const instead = (object, method, callback, options = {}) => patch("instead", object, method, callback, options);
+const after = (object, method, callback, options = {}) => patch("after", object, method, callback, options);
 const unpatchAll = () => {
-    if (menuPatches.length + BdApi.Patcher.getPatchesByCaller(getMeta().name).length > 0) {
-        for (const cancel of menuPatches) {
+    if (manualPatches.length + BdApi.Patcher.getPatchesByCaller(getMeta().name).length > 0) {
+        BdApi.Patcher.unpatchAll(getMeta().name);
+        for (const cancel of manualPatches) {
             cancel();
         }
-        menuPatches = [];
-        BdApi.Patcher.unpatchAll(getMeta().name);
+        manualPatches = [];
         log("Unpatched all");
     }
 };
@@ -207,7 +220,7 @@ const { useStateFromStores, } = /* @__PURE__ */ demangle({
 const GuildStore = /* @__PURE__ */ byName("GuildStore");
 
 const { React } = BdApi;
-const classNames = /* @__PURE__ */ find((exports) => exports instanceof Object && exports.default === exports && Object.keys(exports).length === 1);
+const classNames = /* @__PURE__ */ find((exports$1) => exports$1 instanceof Object && exports$1.default === exports$1 && Object.keys(exports$1).length === 1);
 
 const PresenceStore = /* @__PURE__ */ byName("PresenceStore");
 const RelationshipStore = /* @__PURE__ */ byName("RelationshipStore");
@@ -216,7 +229,7 @@ const Button = /* @__PURE__ */ byKeys(["Colors", "Link"], { entries: true });
 
 const Flex = /* @__PURE__ */ byKeys(["Child", "Justify", "Align"], { entries: true });
 
-const FormDivider = /* @__PURE__ */ bySource([".divider", (source) => /{className:.,gap:.}=/.test(source)], {
+const FormDivider = /* @__PURE__ */ bySource(["marginTop:", (source) => /{className:.,gap:.}=/.test(source)], {
     entries: true,
 });
 
@@ -335,20 +348,11 @@ const SettingsContainer = ({ name, children, onReset }) => (React.createElement(
                 }) }, "Reset")))) : null));
 
 class SettingsStore {
+    defaults;
+    current;
+    onLoad;
+    listeners = new Set();
     constructor(defaults, onLoad) {
-        this.listeners = new Set();
-        this.getCurrent = () => this.current;
-        this.update = (settings) => {
-            const update = typeof settings === "function" ? settings(this.current) : settings;
-            this.current = { ...this.current, ...update };
-            this._dispatch(true);
-        };
-        this.addListenerEffect = (listener) => {
-            this.addListener(listener);
-            return () => this.removeListener(listener);
-        };
-        this.addReactChangeListener = this.addListener;
-        this.removeReactChangeListener = this.removeListener;
         this.defaults = defaults;
         this.onLoad = onLoad;
     }
@@ -365,6 +369,12 @@ class SettingsStore {
             save("settings", this.current);
         }
     }
+    getCurrent = () => this.current;
+    update = (settings) => {
+        const update = typeof settings === "function" ? settings(this.current) : settings;
+        this.current = { ...this.current, ...update };
+        this._dispatch(true);
+    };
     reset() {
         this.current = { ...this.defaults };
         this._dispatch(true);
@@ -405,12 +415,18 @@ class SettingsStore {
         this.listeners.add(listener);
         return listener;
     }
+    addListenerEffect = (listener) => {
+        this.addListener(listener);
+        return () => this.removeListener(listener);
+    };
     removeListener(listener) {
         this.listeners.delete(listener);
     }
     removeAllListeners() {
         this.listeners.clear();
     }
+    addReactChangeListener = this.addListener;
+    removeReactChangeListener = this.removeListener;
 }
 const createSettings = (defaults, onLoad) => new SettingsStore(defaults, onLoad);
 
@@ -475,17 +491,10 @@ const CountContextMenu = (props) => {
             React.createElement(MenuCheckboxItem, { id: "interval", label: "Auto rotate", checked: settings.interval, action: () => setSettings({ interval: !settings.interval }) }))));
 };
 
-const css = ".item-OnlineFriendCount {\n  color: var(--channels-default);\n  text-align: center;\n  text-transform: uppercase;\n  font-size: 10px;\n  font-weight: 500;\n  line-height: 1.3;\n  width: 70px;\n  word-wrap: normal;\n  white-space: nowrap;\n}\n\n.link-OnlineFriendCount {\n  cursor: pointer;\n}\n.link-OnlineFriendCount:hover {\n  color: var(--interactive-hover);\n}";
+const css = ".item-OnlineFriendCount{color:var(--channels-default);text-align:center;text-transform:uppercase;font-size:10px;font-weight:500;line-height:1.3;width:70px;word-wrap:normal;white-space:nowrap}.link-OnlineFriendCount{cursor:pointer}.link-OnlineFriendCount:hover{color:var(--interactive-hover)}";
 const styles = {
     item: "item-OnlineFriendCount",
-    link: "link-OnlineFriendCount",
-    container: "container-OnlineFriendCount",
-    counter: "counter-OnlineFriendCount",
-    guilds: "guilds-OnlineFriendCount",
-    friends: "friends-OnlineFriendCount",
-    friendsOnline: "friendsOnline-OnlineFriendCount",
-    pending: "pending-OnlineFriendCount",
-    blocked: "blocked-OnlineFriendCount"
+    link: "link-OnlineFriendCount"
 };
 
 const listStyles = byKeys(["listItem", "iconBadge"]);

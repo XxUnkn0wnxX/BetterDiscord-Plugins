@@ -1,0 +1,88 @@
+name: Build Plugins
+
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - master
+        paths:
+            - .github/workflows/build-plugins.yml
+            - package.json
+            - package-lock.json
+            - rollup.config.ts
+            - tsconfig.json
+            - global.d.ts
+            - scripts/build.ts
+            - packages/**
+            - src/**
+
+permissions:
+    contents: write
+
+concurrency:
+    group: build-plugins-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    build:
+        if: github.ref == 'refs/heads/master'
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Type check
+              run: npm run check
+
+            - name: Lint
+              run: npm run lint
+
+            - name: Prepare dist directory
+              run: |
+                  mkdir -p dist/bd
+                  find dist/bd -maxdepth 1 -type f -name '*.plugin.js' -delete
+
+            - name: Build plugins
+              run: npm run build -- BetterFolders BetterVolume CollapseEmbeds NoReplyMention OnlineFriendCount VoiceEvents
+
+            - name: Commit updated distributables
+              run: |
+                  git add -A dist/bd
+
+                  if git diff --cached --quiet; then
+                    echo "No distributable changes to commit."
+                    exit 0
+                  fi
+
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git commit -m "Build plugins"
+                  git push origin master
+
+            - name: Refresh rolling fork release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  TAG="Nightly-Fork"
+                  FULL_SHA="$(git rev-parse HEAD)"
+
+                  gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes || true
+                  git push origin ":refs/tags/$TAG" || true
+
+                  gh release create "$TAG" dist/bd/*.plugin.js \
+                    --repo "$GITHUB_REPOSITORY" \
+                    --target "$FULL_SHA" \
+                    --title "Nightly-Fork" \
+                    --notes "Auto-built from commit $FULL_SHA." \
+                    --latest

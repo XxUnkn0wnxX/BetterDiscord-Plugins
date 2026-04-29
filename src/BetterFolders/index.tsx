@@ -7,6 +7,17 @@ import { FolderSettingsClass, mountFolderSettingsPatch, renderFolderSettingsPatc
 import { css } from "./styles.module.scss";
 
 const guildStyles = Finder.byKeys(["guilds", "base"]);
+const folderIconWrapperFilter = Filters.bySource((source) => {
+    return (
+        source.includes("folderNode:")
+        && (source.includes("folderName") || source.includes(".folderName"))
+        && (
+            source.includes("folderGroupId:")
+            || source.includes("folderIconWrapper")
+            || source.includes("expandedFolderIconWrapper")
+        )
+    );
+});
 
 const getGuildsOwner = () => {
     const node = document.getElementsByClassName(guildStyles.guilds)?.[0];
@@ -37,39 +48,47 @@ export default createPlugin({
 
         // patch folder icon wrapper
         // icon is in same module, not exported
-        const FolderIconWrapper = Finder.findWithKey<React.FunctionComponent<PropsWithFolderNode>>(
-            Filters.bySource("folderNode:", "folderGroupId:", "folderName"),
-        );
-        Patcher.after(
-            ...FolderIconWrapper,
-            ({ args: [props], result }) => {
-                const icon = Utils.queryTree(result, (node) => node?.props?.folderNode) as React.ReactElement<
-                    PropsWithFolderNode,
-                    FolderIcon
-                >;
-                if (!icon) {
-                    return Logger.error("Unable to find FolderIcon component");
-                }
+        Finder.waitFor<Record<string, React.FunctionComponent<PropsWithFolderNode>>>(
+            Filters.byEntry(folderIconWrapperFilter),
+            { resolve: false },
+        ).then((result) => {
+            const FolderIconWrapper = Finder.resolveKey(result, folderIconWrapperFilter);
+            if (!FolderIconWrapper[0] || !FolderIconWrapper[1]) {
+                Logger.error("Unable to find FolderIconWrapper module");
+                return;
+            }
 
-                // save icon component
-                if (!FolderIcon) {
-                    Logger.log("Found FolderIcon component");
-                    FolderIcon = icon.type;
-                }
+            Patcher.after(
+                ...FolderIconWrapper,
+                ({ args: [props], result }) => {
+                    const icon = Utils.queryTree(result, (node) => node?.props?.folderNode) as React.ReactElement<
+                        PropsWithFolderNode,
+                        FolderIcon
+                    >;
+                    if (!icon) {
+                        return Logger.error("Unable to find FolderIcon component");
+                    }
 
-                // replace icon with own component
-                Utils.replaceElement(
-                    icon,
-                    <ConnectedBetterFolderIcon
-                        folderId={props.folderNode.id}
-                        childProps={icon.props}
-                        FolderIcon={FolderIcon}
-                    />,
-                );
-            },
-            { name: "FolderIconWrapper" },
-        );
-        triggerRerender(guildsOwner);
+                    // save icon component
+                    if (!FolderIcon) {
+                        Logger.log("Found FolderIcon component");
+                        FolderIcon = icon.type;
+                    }
+
+                    // replace icon with own component
+                    Utils.replaceElement(
+                        icon,
+                        <ConnectedBetterFolderIcon
+                            folderId={props.folderNode.id}
+                            childProps={icon.props}
+                            FolderIcon={FolderIcon}
+                        />,
+                    );
+                },
+                { name: "FolderIconWrapper" },
+            );
+            triggerRerender(guildsOwner);
+        });
 
         // patch folder expand
         Patcher.after(ClientActions, "toggleGuildFolderExpand", ({ original, args: [folderId] }) => {
