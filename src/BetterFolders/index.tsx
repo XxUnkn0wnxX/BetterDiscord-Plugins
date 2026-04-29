@@ -6,6 +6,7 @@ import { ConnectedBetterFolderIcon, FolderIcon, PropsWithFolderNode } from "./ic
 import { FolderSettingsClass, mountFolderSettingsPatch, renderFolderSettingsPatch } from "./settings-modal";
 import { css } from "./styles.module.scss";
 
+// CI selection test: BetterFolders only
 const guildStyles = Finder.byKeys(["guilds", "base"]);
 const folderIconWrapperFilter = Filters.bySource((source) => {
     return (

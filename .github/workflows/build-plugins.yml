@@ -174,5 +174,5 @@ jobs:
                     --repo "$GITHUB_REPOSITORY" \
                     --target "$FULL_SHA" \
                     --title "Nightly-Fork" \
-                    --notes "Auto-built from commit $FULL_SHA. Browse the full published plugin set in dist/bd on master: $DIST_URL. This rolling release may only reflect the plugins rebuilt by the latest change set." \
+                    --notes "Auto-built from commit $FULL_SHA. Browse the full published plugin set in [dist/bd]($DIST_URL) on master. This rolling release may only reflect the plugins rebuilt by the latest change set." \
                     --latest
