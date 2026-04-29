@@ -166,11 +166,17 @@ jobs:
                   TAG="Nightly-Fork"
                   FULL_SHA="$(git rev-parse HEAD)"
                   DIST_URL="https://github.com/$GITHUB_REPOSITORY/tree/master/dist/bd"
+                  read -r -a targets <<< "${{ steps.targets.outputs.targets }}"
+                  assets=()
+
+                  for plugin in "${targets[@]}"; do
+                    assets+=("dist/bd/${plugin}.plugin.js")
+                  done
 
                   gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes || true
                   git push origin ":refs/tags/$TAG" || true
 
-                  gh release create "$TAG" dist/bd/*.plugin.js \
+                  gh release create "$TAG" "${assets[@]}" \
                     --repo "$GITHUB_REPOSITORY" \
                     --target "$FULL_SHA" \
                     --title "Nightly-Fork" \
