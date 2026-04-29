@@ -1,6 +1,5 @@
 import { createPlugin, Finder, Filters, Patcher } from "dium";
 
-// CI selection test: all published plugins round 2
 const ReplyActions = Finder.demangle(
     {
         createPendingReply: Filters.bySource("shouldMention", "CREATE_PENDING_REPLY"),

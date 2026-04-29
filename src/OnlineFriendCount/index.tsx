@@ -4,7 +4,6 @@ import { Settings } from "./settings";
 import { CountersContainer } from "./counter";
 import { css } from "./styles.module.scss";
 
-// CI selection test: all published plugins round 2
 const guildStyles = Finder.byKeys(["guilds", "base"]);
 
 const triggerRerender = async () => {
