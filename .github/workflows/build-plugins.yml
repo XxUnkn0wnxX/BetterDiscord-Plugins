@@ -59,7 +59,7 @@ jobs:
                   declare -A selected=()
 
                   mapfile -t published < <(
-                    node <<'EOF'
+                    node -e '
                     const fs = require("fs");
                     const path = require("path");
 
@@ -76,7 +76,7 @@ jobs:
                         console.log(name);
                       }
                     }
-                    EOF
+                    '
                   )
 
                   for plugin in "${published[@]}"; do
