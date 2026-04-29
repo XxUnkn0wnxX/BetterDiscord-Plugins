@@ -3,6 +3,9 @@
     "author": "Zerthox",
     "version": "0.1.4",
     "description": "View all SVG components bundled in Discord",
+    "betterdiscord": {
+        "publish": false
+    },
     "dependencies": {
         "dium": "*"
     }

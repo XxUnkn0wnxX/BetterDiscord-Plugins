@@ -23,9 +23,6 @@ concurrency:
     group: build-plugins-${{ github.ref }}
     cancel-in-progress: true
 
-env:
-    PUBLISHED_PLUGINS: BetterFolders BetterVolume CollapseEmbeds NoReplyMention OnlineFriendCount VoiceEvents
-
 jobs:
     build:
         if: github.ref == 'refs/heads/master'
@@ -58,9 +55,29 @@ jobs:
                   EVENT_BEFORE: ${{ github.event.before }}
                   EVENT_SHA: ${{ github.sha }}
               run: |
-                  published=($PUBLISHED_PLUGINS)
                   declare -A published_map=()
                   declare -A selected=()
+
+                  mapfile -t published < <(
+                    node <<'EOF'
+                    const fs = require("fs");
+                    const path = require("path");
+
+                    const srcDir = path.join(process.cwd(), "src");
+                    const entries = fs.readdirSync(srcDir, { withFileTypes: true })
+                      .filter((entry) => entry.isDirectory())
+                      .map((entry) => entry.name)
+                      .sort();
+
+                    for (const name of entries) {
+                      const pkgPath = path.join(srcDir, name, "package.json");
+                      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+                      if (pkg.betterdiscord?.publish !== false) {
+                        console.log(name);
+                      }
+                    }
+                    EOF
+                  )
 
                   for plugin in "${published[@]}"; do
                     published_map["$plugin"]=1
@@ -109,7 +126,12 @@ jobs:
                   fi
 
                   echo "should_build=true" >> "$GITHUB_OUTPUT"
-                  echo "targets=${targets[*]}" >> "$GITHUB_OUTPUT"
+                  {
+                    echo "targets<<EOF"
+                    printf '%s ' "${targets[@]}"
+                    echo
+                    echo "EOF"
+                  } >> "$GITHUB_OUTPUT"
                   printf 'Building targets: %s\n' "${targets[*]}"
 
             - name: Prepare dist directory
