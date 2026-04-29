@@ -23,6 +23,9 @@ concurrency:
     group: build-plugins-${{ github.ref }}
     cancel-in-progress: true
 
+env:
+    PUBLISHED_PLUGINS: BetterFolders BetterVolume CollapseEmbeds NoReplyMention OnlineFriendCount VoiceEvents
+
 jobs:
     build:
         if: github.ref == 'refs/heads/master'
@@ -48,15 +51,78 @@ jobs:
             - name: Lint
               run: npm run lint
 
+            - name: Determine build targets
+              id: targets
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  EVENT_BEFORE: ${{ github.event.before }}
+                  EVENT_SHA: ${{ github.sha }}
+              run: |
+                  published=($PUBLISHED_PLUGINS)
+                  declare -A published_map=()
+                  declare -A selected=()
+
+                  for plugin in "${published[@]}"; do
+                    published_map["$plugin"]=1
+                  done
+
+                  rebuild_all=false
+
+                  if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+                    rebuild_all=true
+                  elif [ -z "$EVENT_BEFORE" ] || [ "$EVENT_BEFORE" = "0000000000000000000000000000000000000000" ]; then
+                    rebuild_all=true
+                  else
+                    while IFS= read -r file; do
+                      [ -n "$file" ] || continue
+
+                      case "$file" in
+                        src/*)
+                          plugin="${file#src/}"
+                          plugin="${plugin%%/*}"
+                          if [ -n "${published_map[$plugin]}" ]; then
+                            selected["$plugin"]=1
+                          fi
+                          ;;
+                        packages/*|scripts/build.ts|package.json|package-lock.json|rollup.config.ts|tsconfig.json|global.d.ts)
+                          rebuild_all=true
+                          ;;
+                      esac
+                    done < <(git diff --name-only "$EVENT_BEFORE" "$EVENT_SHA")
+                  fi
+
+                  targets=()
+                  if [ "$rebuild_all" = true ]; then
+                    targets=("${published[@]}")
+                  else
+                    for plugin in "${published[@]}"; do
+                      if [ -n "${selected[$plugin]}" ]; then
+                        targets+=("$plugin")
+                      fi
+                    done
+                  fi
+
+                  if [ "${#targets[@]}" -eq 0 ]; then
+                    echo "should_build=false" >> "$GITHUB_OUTPUT"
+                    echo "No published plugin targets changed."
+                    exit 0
+                  fi
+
+                  echo "should_build=true" >> "$GITHUB_OUTPUT"
+                  echo "targets=${targets[*]}" >> "$GITHUB_OUTPUT"
+                  printf 'Building targets: %s\n' "${targets[*]}"
+
             - name: Prepare dist directory
+              if: steps.targets.outputs.should_build == 'true'
               run: |
                   mkdir -p dist/bd
-                  find dist/bd -maxdepth 1 -type f -name '*.plugin.js' -delete
 
             - name: Build plugins
-              run: npm run build -- BetterFolders BetterVolume CollapseEmbeds NoReplyMention OnlineFriendCount VoiceEvents
+              if: steps.targets.outputs.should_build == 'true'
+              run: npm run build -- ${{ steps.targets.outputs.targets }}
 
             - name: Commit updated distributables
+              if: steps.targets.outputs.should_build == 'true'
               run: |
                   git add -A dist/bd
 
@@ -71,6 +137,7 @@ jobs:
                   git push origin master
 
             - name: Refresh rolling fork release
+              if: steps.targets.outputs.should_build == 'true'
               env:
                   GH_TOKEN: ${{ github.token }}
               run: |
