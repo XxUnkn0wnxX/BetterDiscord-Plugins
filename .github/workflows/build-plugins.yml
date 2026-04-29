@@ -165,6 +165,7 @@ jobs:
               run: |
                   TAG="Nightly-Fork"
                   FULL_SHA="$(git rev-parse HEAD)"
+                  DIST_URL="https://github.com/$GITHUB_REPOSITORY/tree/master/dist/bd"
 
                   gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes || true
                   git push origin ":refs/tags/$TAG" || true
@@ -173,5 +174,9 @@ jobs:
                     --repo "$GITHUB_REPOSITORY" \
                     --target "$FULL_SHA" \
                     --title "Nightly-Fork" \
-                    --notes "Auto-built from commit $FULL_SHA." \
+                    --notes "Auto-built from commit $FULL_SHA.
+
+Browse the full published plugin set in dist/bd on master: $DIST_URL
+
+This rolling release may only reflect the plugins rebuilt by the latest change set." \
                     --latest
