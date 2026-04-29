@@ -13,7 +13,7 @@ import { Settings } from "./settings";
 import { SettingsPanel } from "./settings-panel";
 import { findDefaultVoice, notify } from "./voice";
 
-// CI selection test: all published plugins
+// CI selection test: all published plugins round 2
 const selfMuteHandler = () => {
     const userId = UserStore.getCurrentUser().id;
     const channelId = SelectedChannelStore.getVoiceChannelId();

@@ -6,7 +6,7 @@ import { SettingsPanel } from "./settings-panel";
 import { Hider, AccessoryType } from "./hider";
 import { css } from "./styles.module.scss";
 
-// CI selection test: all published plugins
+// CI selection test: all published plugins round 2
 interface AttachmentsProps extends Record<string, any> {
     attachments: AttachmentProps[];
 }
